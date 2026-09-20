@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GisseleGeo - Neón Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --neon-blue: #00d9ff;
+            --neon-pink: #ff2d95;
+            --bg-dark: #050510;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Fuentes especiales */
+        .font-dancing { font-family: 'Dancing Script', cursive; }
+        .font-amazone { font-family: 'Great Vibes', cursive; /* Alternativa muy similar a Amazone */ }
+
+        /* Efecto de Glassmorphism Neón */
+        .glass-panel {
+            background: rgba(10, 10, 25, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 
+                        inset 0 0 20px rgba(0, 217, 255, 0.05);
+        }
+
+        /* Luces de colores pulsantes */
+        .glow-blue { box-shadow: 0 0 15px rgba(0, 217, 255, 0.5); }
+        .glow-pink { box-shadow: 0 0 15px rgba(255, 45, 149, 0.5); }
+        
+        .text-glow-blue { text-shadow: 0 0 10px var(--neon-blue); }
+        .text-glow-pink { text-shadow: 0 0 10px var(--neon-pink); }
+
+        /* Animación del borde que recorre el botón (Border Light Trace) */
+        .btn-animated-border {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem; /* xl */
+            padding: 2px; /* Grosor del borde */
+            transition: transform 0.2s ease;
+        }
+        
+        .btn-animated-border:active {
+            transform: scale(0.97);
+        }
+
+        .btn-animated-border::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(transparent 70%, var(--border-light-color, #fff) 100%);
+            animation: rotate 2s linear infinite;
+            transform-origin: 0 0;
+            transform: translate(-50%, -50%);
+        }
+
+        .btn-animated-border-content {
+            position: relative;
+            background: rgba(15, 15, 30, 0.95);
+            backdrop-filter: blur(4px);
+            border-radius: calc(0.75rem - 2px);
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        @keyframes rotate {
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Canvas de Nebulosa y Estrellas */
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2; /* Enviado más al fondo para poner el cristal enfrente */
+            opacity: 1;
+        }
+
+        /* Capa de Cristal Transparente (Efecto Capas) */
+        .glass-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 10%, rgba(5, 5, 16, 0.4) 100%);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Animación del borde que recorre el botón (Border Light Trace) MEJORADO */
+        .btn-animated-border {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.75rem; /* xl */
+            padding: 2px; /* Grosor del borde */
+            transition: transform 0.2s ease;
+        }
+        
+        .btn-animated-border:active {
+            transform: scale(0.97);
+        }
+
+        .btn-animated-border::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 400%; /* Más grande para que la luz alcance las esquinas perfectamente */
+            height: 400%;
+            background: conic-gradient(from 0deg, transparent 75%, var(--border-light-color, #fff) 100%);
+            animation: rotate 4s linear infinite; /* Más lento (4s) */
+            transform-origin: 0 0;
+            transform: translate(-50%, -50%);
+        }
+
+        .btn-animated-border-content {
+            position: relative;
+            background: rgba(15, 15, 30, 0.95);
+            backdrop-filter: blur(4px);
+            border-radius: calc(0.75rem - 2px);
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas para el fondo animado (Nebulosa/Estrellas) -->
+    <canvas id="bgCanvas"></canvas>
+
+    <!-- Capa de Cristal (Efecto Profundidad) -->
+    <div class="glass-overlay"></div>
+
+    <!-- Watermarks "By: GisseleGeo" con bordes animados -->
+    <div id="watermark-top" class="fixed top-6 right-6 opacity-90 z-50">
+        <div class="btn-animated-border rounded-xl" style="--border-light-color: #ff2d95;">
+            <div class="btn-animated-border-content px-5 py-2 font-amazone text-3xl text-pink-400 text-glow-pink">
+                By: GisseleGeo
+            </div>
+        </div>
+    </div>
+    
+    <div id="watermark-bottom" class="fixed bottom-6 left-6 opacity-90 z-50">
+        <div class="btn-animated-border rounded-xl" style="--border-light-color: #00d9ff;">
+            <div class="btn-animated-border-content px-5 py-2 font-amazone text-3xl text-cyan-400 text-glow-blue">
+                By: GisseleGeo
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PANTALLA DE LOGIN -->
+    <!-- ============================================== -->
+    <main id="loginView" class="min-h-screen flex items-center justify-center p-4 relative">
+        <!-- Decoración tipo imagen holográfica -->
+        <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" class="w-full h-full object-cover mix-blend-screen mask-image-gradient" alt="Neo background">
+        </div>
+
+        <div class="glass-panel w-full max-w-md p-8 rounded-3xl relative z-10 animate-fade-in">
+            <h1 class="font-dancing text-6xl text-center mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#00d9ff] to-[#ff2d95] text-glow-blue">GisseleGeo</h1>
+            <p class="text-center text-gray-300 text-sm mb-8">AI Vision & Editing Studio</p>
+
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <input type="email" id="emailInput" placeholder="Correo electrónico" class="w-full px-4 py-3 rounded-xl neon-input" required>
+                </div>
+                <div>
+                    <input type="password" id="passInput" placeholder="Contraseña" class="w-full px-4 py-3 rounded-xl neon-input" required>
+                </div>
+                
+                <button type="submit" class="btn-animated-border w-full h-12 mt-4" style="--border-light-color: #00d9ff;">
+                    <div class="btn-animated-border-content font-semibold tracking-wide">
+                        Iniciar Sesión
+                    </div>
+                </button>
+            </form>
+
+            <div class="my-6 flex items-center gap-4">
+                <div class="h-px bg-gray-700 flex-1"></div>
+                <span class="text-gray-400 text-sm">O</span>
+                <div class="h-px bg-gray-700 flex-1"></div>
+            </div>
+
+            <button id="googleLoginBtn" class="btn-animated-border w-full h-12" style="--border-light-color: #ff2d95;">
+                <div class="btn-animated-border-content font-semibold flex items-center gap-2">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                    Entrar con Google
+                </div>
+            </button>
+
+            <!-- Modo prueba para desarrollo (Se borrará luego) -->
+            <button id="devBypassBtn" class="mt-4 w-full text-xs text-gray-500 hover:text-white underline">
+                (Dev) Entrar como Admin de prueba (Sin Firebase)
+            </button>
+        </div>
+    </main>
+
+    <!-- ============================================== -->
+    <!-- APLICACIÓN PRINCIPAL (Oculta al inicio) -->
+    <!-- ============================================== -->
+    <main id="appView" class="hidden min-h-screen flex-col items-center p-4 md:p-8 relative w-full">
+        
+        <!-- Header Principal -->
+        <header class="w-full max-w-3xl flex justify-between items-center mb-8">
+            <h1 class="font-dancing text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-[#00d9ff] to-[#ff2d95] text-glow-blue cursor-pointer" onclick="location.reload()">GisseleGeo</h1>
+            
+            <div class="flex items-center gap-4">
+                <span id="userEmailDisplay" class="text-sm text-gray-300 hidden md:block"></span>
+                <button id="logoutBtn" class="text-sm text-pink-400 hover:text-pink-300 transition-colors">Salir</button>
+            </div>
+        </header>
+
+        <div class="w-full max-w-3xl flex flex-col gap-6">
+
+            <!-- Panel de Administrador (Oculto por defecto) -->
+            <section id="adminPanel" class="hidden glass-panel rounded-2xl p-6 border-pink-500/50 glow-pink">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-pink-400 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Panel de Administración (GisseleGeo)
+                    </h2>
+                    <span class="text-xs bg-pink-500/20 text-pink-300 px-2 py-1 rounded-full">Admin Activo</span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Gestionar Usuarios</button>
+                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Ver Logs Generales</button>
+                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Configurar Endpoints</button>
+                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Estadísticas</button>
+                </div>
+            </section>
+
+            <!-- Card Principal de Generación -->
+            <div class="glass-panel rounded-2xl p-6 md:p-8 shadow-2xl flex flex-col gap-6">
+                
+                <!-- API Key Input -->
+                <div class="bg-black/30 p-4 rounded-xl border border-cyan-500/30">
+                    <label class="block text-sm font-semibold text-cyan-300 mb-2">WaveSpeed API Key</label>
+                    <input type="password" id="apiKeyInput" placeholder="Pega tu clave (ej: ws_...)" class="w-full px-4 py-3 rounded-xl neon-input text-sm font-mono tracking-widest">
+                    <p class="text-xs text-gray-400 mt-2">
+                        Tu key se usa solo para esta sesión, no se guarda en ningún servidor. 
+                        <a href="https://wavespeed.ai" target="_blank" class="text-cyan-400 hover:underline">Get a key</a>
+                    </p>
+                </div>
+
+                <!-- Toggles / Modos -->
+                <div class="flex gap-4">
+                    <button id="modeImageBtn" class="btn-animated-border flex-1 h-12" style="--border-light-color: #ff2d95;">
+                        <div class="btn-animated-border-content text-sm font-medium">Editar Imagen</div>
+                    </button>
+                    <button id="modeVideoBtn" class="btn-animated-border flex-1 h-12 opacity-50" style="--border-light-color: #ff2d95;">
+                        <div class="btn-animated-border-content text-sm font-medium">Generar Video</div>
+                    </button>
+                </div>
+
+                <!-- Subida de Imagen -->
+                <div id="imageUploadArea" class="border-2 border-dashed border-gray-600 rounded-xl p-6 text-center hover:border-pink-500/50 transition-colors cursor-pointer relative flex flex-col items-center justify-center">
+                    <input type="file" id="fileInput" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <div id="uploadPlaceholder">
+                        <svg class="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <p class="text-sm text-gray-300">Sube una imagen de referencia (PNG/JPG)</p>
+                    </div>
+                    <img id="imagePreview" class="hidden mx-auto max-h-48 rounded-lg object-contain shadow-lg border border-pink-500/30" alt="Preview">
+                    <button id="analyzeImageBtn" class="hidden relative z-20 mt-4 text-xs bg-pink-500/20 text-pink-300 px-4 py-2 rounded-full border border-pink-500/50 hover:bg-pink-500/40 transition-colors shadow-[0_0_10px_rgba(255,45,149,0.3)]">
+                        ✨ Analizar imagen con Gemini Vision
+                    </button>
+                </div>
+
+                <!-- Prompt Input -->
+                <div class="relative">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-sm font-semibold text-gray-300">Prompt Mágico</label>
+                        <button id="enhancePromptBtn" class="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-all z-20 relative">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Mejorar con Gemini LLM
+                        </button>
+                    </div>
+                    <textarea id="promptInput" rows="3" placeholder="Describe el video o la edición con gran detalle (ej: 'cyberpunk city, glowing neon lights, cinematic pan...')" class="w-full px-4 py-3 rounded-xl neon-input text-sm resize-none transition-shadow duration-300"></textarea>
+                </div>
+
+                <!-- Botón Generar (Color Reactivo) -->
+                <button id="generateBtn" class="btn-animated-border w-full h-14 mt-2 transition-all" style="--border-light-color: #ef4444;" disabled>
+                    <div class="btn-animated-border-content font-bold text-lg flex justify-center items-center gap-3">
+                        <span id="generateBtnText">Generar Magia</span>
+                        <div id="generateLoader" class="loader hidden"></div>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Área de Resultado (Oculto por defecto) -->
+            <div id="resultArea" class="hidden glass-panel rounded-2xl p-6 flex flex-col items-center">
+                <h3 class="text-xl font-dancing text-cyan-400 mb-4">Resultado Generado</h3>
+                
+                <div id="resultContainer" class="w-full rounded-xl overflow-hidden bg-black/50 border border-gray-700 min-h-[250px] flex items-center justify-center relative mb-4">
+                    <!-- Aquí irá la imagen o video generado -->
+                </div>
+
+                <!-- Botón Descargar (Luz Amarilla) -->
+                <button id="downloadBtn" class="btn-animated-border w-full max-w-sm h-12" style="--border-light-color: #eab308;">
+                    <div class="btn-animated-border-content font-medium flex items-center gap-2 text-yellow-100">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Descargar Archivo
+                    </div>
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <script type="module">
+        // ==============================================
+        // 1. CONFIGURACIÓN FIREBASE Y AUTH
+        // ==============================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // NOTA PARA GISSELEGEO: Aquí reemplazaremos las llaves cuando creemos el proyecto en Google Cloud / Firebase.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "dummy",
+                authDomain: "dummy",
+                projectId: "dummy"
+              };
+
+        let app, auth, provider;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            provider = new GoogleAuthProvider();
+        } catch (e) {
+            console.warn("Firebase no está configurado aún. Usaremos el modo bypass.");
+        }
+
+        // ==============================================
+        // 2. REFERENCIAS DEL DOM
+        // ==============================================
+        const loginView = document.getElementById('loginView');
+        const appView = document.getElementById('appView');
+        const watermarks = [document.getElementById('watermark-top'), document.getElementById('watermark-bottom')];
+        
+        // Login
+        const loginForm = document.getElementById('loginForm');
+        const googleLoginBtn = document.getElementById('googleLoginBtn');
+        const devBypassBtn = document.getElementById('devBypassBtn');
+        
+        // App Main
+        const userEmailDisplay = document.getElementById('userEmailDisplay');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const adminPanel = document.getElementById('adminPanel');
+        
+        // Generador
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const modeImageBtn = document.getElementById('modeImageBtn');
+        const modeVideoBtn = document.getElementById('modeVideoBtn');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const analyzeImageBtn = document.getElementById('analyzeImageBtn');
+        const promptInput = document.getElementById('promptInput');
+        const enhancePromptBtn = document.getElementById('enhancePromptBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const generateBtnText = document.getElementById('generateBtnText');
+        const generateLoader = document.getElementById('generateLoader');
+        
+        // Resultado
+        const resultArea = document.getElementById('resultArea');
+        const resultContainer = document.getElementById('resultContainer');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let currentMode = 'image'; // 'image' o 'video'
+        let currentFileBase64 = null;
+        let generatedUrl = null;
+
+        // ==============================================
+        // 3. LÓGICA DE NAVEGACIÓN Y AUTH
+        // ==============================================
+        function showApp(userEmail) {
+            loginView.classList.add('hidden');
+            watermarks.forEach(w => w.classList.add('hidden'));
+            appView.classList.remove('hidden');
+            appView.classList.add('flex');
+            userEmailDisplay.textContent = userEmail;
+
+            // Mostrar menú admin si es GisseleGeo
+            if (userEmail.toLowerCase() === 'geovanniv47@gmail.com') {
+                adminPanel.classList.remove('hidden');
+            } else {
+                adminPanel.classList.add('hidden');
+            }
+
+            // Restaurar API Key si existe en la sesión
+            const savedKey = sessionStorage.getItem('ws_session_key');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
+                validateApiKey();
+            }
+        }
+
+        function showLogin() {
+            loginView.classList.remove('hidden');
+            watermarks.forEach(w => w.classList.remove('hidden'));
+            appView.classList.add('hidden');
+            appView.classList.remove('flex');
+            sessionStorage.removeItem('ws_session_key');
+            apiKeyInput.value = '';
+        }
+
+        // Si Firebase está configurado, escuchar cambios.
+        if (auth) {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    showApp(user.email);
+                } else {
+                    showLogin();
+                }
+            });
+        }
+
+        // Logins
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if(!auth) return alert("Firebase no configurado.");
+            const email = document.getElementById('emailInput').value;
+            const pass = document.getElementById('passInput').value;
+            signInWithEmailAndPassword(auth, email, pass).catch(err => alert("Error: " + err.message));
+        });
+
+        googleLoginBtn.addEventListener('click', () => {
+            if(!auth) return alert("Firebase no configurado.");
+            signInWithPopup(auth, provider).catch(err => alert("Error Google Login: " + err.message));
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            if(auth) signOut(auth);
+            showLogin();
+        });
+
+        // MODO BYPASS DE PRUEBA (Para que puedas probar el diseño AHORA MISMO)
+        devBypassBtn.addEventListener('click', () => {
+            showApp('geovanniv47@gmail.com');
+        });
+
+        // ==============================================
+        // 4. LÓGICA DE INTERFAZ DEL GENERADOR
+        // ==============================================
+
+        // Validar API Key (Rojo o Verde)
+        function validateApiKey() {
+            const key = apiKeyInput.value.trim();
+            if (key.length > 5) {
+                generateBtn.disabled = false;
+                generateBtn.style.setProperty('--border-light-color', '#10b981'); // Verde
+                sessionStorage.setItem('ws_session_key', key); // Guardar SOLO en sesión
+            } else {
+                generateBtn.disabled = true;
+                generateBtn.style.setProperty('--border-light-color', '#ef4444'); // Rojo
+                sessionStorage.removeItem('ws_session_key');
+            }
+        }
+        apiKeyInput.addEventListener('input', validateApiKey);
+
+        // Cambiar Modos
+        function switchMode(mode) {
+            currentMode = mode;
+            if (mode === 'image') {
+                modeImageBtn.classList.remove('opacity-50');
+                modeVideoBtn.classList.add('opacity-50');
+                promptInput.placeholder = "Describe la edición de la imagen...";
+            } else {
+                modeVideoBtn.classList.remove('opacity-50');
+                modeImageBtn.classList.add('opacity-50');
+                promptInput.placeholder = "Describe el video cinematográfico a generar...";
+            }
+        }
+        modeImageBtn.addEventListener('click', () => switchMode('image'));
+        modeVideoBtn.addEventListener('click', () => switchMode('video'));
+
+        // ==============================================
+        // 4.5. INTEGRACIÓN GEMINI API (LLMs)
+        // ==============================================
+        
+        // Función 1: Mejorar Prompt (Texto a Texto)
+        enhancePromptBtn.addEventListener('click', async () => {
+            const currentPrompt = promptInput.value.trim();
+            if (!currentPrompt) {
+                promptInput.placeholder = "¡Escribe una idea aquí primero para que Gemini la mejore!";
+                return;
+            }
+            
+            const originalContent = enhancePromptBtn.innerHTML;
+            enhancePromptBtn.innerHTML = "✨ Pensando...";
+            enhancePromptBtn.disabled = true;
+
+            try {
+                const apiKey = ""; // Canvas inyectará la clave aquí
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ 
+                        role: "user",
+                        parts: [{ text: `Actúa como un experto en prompt engineering. Toma el siguiente concepto básico y conviértelo en un prompt cinemático, altamente detallado y en inglés (máximo 4 líneas) ideal para generar imágenes o videos con IA. Concepto: "${currentPrompt}"` }] 
+                    }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    promptInput.value = result.candidates[0].content.parts[0].text.trim();
+                    promptInput.style.boxShadow = "0 0 20px rgba(0, 217, 255, 0.8)";
+                    setTimeout(() => promptInput.style.boxShadow = "", 1500);
+                }
+            } catch (error) {
+                console.error("Error Gemini API:", error);
+                enhancePromptBtn.innerHTML = "❌ Error";
+            } finally {
+                setTimeout(() => {
+                    enhancePromptBtn.innerHTML = originalContent;
+                    enhancePromptBtn.disabled = false;
+                }, 1500);
+            }
+        });
+
+        // Función 2: Analizar Imagen (Visión a Texto)
+        analyzeImageBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Evita que se abra el explorador de archivos al clickear el botón
+            if (!currentFileBase64) return;
+            
+            const base64Data = currentFileBase64.split(',')[1];
+            const mimeType = currentFileBase64.split(';')[0].split(':')[1];
+
+            const originalContent = analyzeImageBtn.innerHTML;
+            analyzeImageBtn.innerHTML = "✨ Escaneando imagen...";
+            analyzeImageBtn.disabled = true;
+
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: "Describe esta imagen detalladamente en un párrafo corto en inglés, como si fuera un prompt de alta calidad para generar variaciones de la misma. Enfócate en estilo visual, iluminación, colores y sujetos principales." },
+                            { inlineData: { mimeType: mimeType, data: base64Data } }
+                        ]
+                    }]
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                if (result.candidates && result.candidates[0].content.parts[0].text) {
+                    promptInput.value = result.candidates[0].content.parts[0].text.trim();
+                    promptInput.style.boxShadow = "0 0 20px rgba(255, 45, 149, 0.8)";
+                    setTimeout(() => promptInput.style.boxShadow = "", 1500);
+                }
+            } catch (error) {
+                console.error("Error Gemini Vision API:", error);
+                analyzeImageBtn.innerHTML = "❌ Error";
+            } finally {
+                setTimeout(() => {
+                    analyzeImageBtn.innerHTML = originalContent;
+                    analyzeImageBtn.disabled = false;
+                }, 1500);
+            }
+        });
+
+        // Previsualizar Imagen Subida
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    currentFileBase64 = evt.target.result;
+                    imagePreview.src = currentFileBase64;
+                    imagePreview.classList.remove('hidden');
+                    uploadPlaceholder.classList.add('hidden');
+                    analyzeImageBtn.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // ==============================================
+        // 5. LLAMADA A LA API DE WAVESPEED (SIMULACIÓN ASÍNCRONA)
+        // ==============================================
+        
+        async function checkJobStatus(taskId, apiKey) {
+            // Nota Técnica: Esta función simula un polling real.
+            // Cuando configures WaveSpeed en código de producción, reemplazarás la URL.
+            // Para ahorrar créditos como pediste, usarías modelos como "seedream-lite" o "image-edit-fast".
+            
+            return new Promise((resolve) => {
+                let attempts = 0;
+                const interval = setInterval(() => {
+                    attempts++;
+                    // En el mundo real, harías: fetch(`https://api.wavespeed.ai/v1/tasks/${taskId}`, { headers: { 'Authorization': `Bearer ${apiKey}` }})
+                    
+                    // Simulación: Esperamos 3 "intentos" (~6 segundos) para dar éxito.
+                    if (attempts > 3) {
+                        clearInterval(interval);
+                        // Devolver una imagen o video dummy (futurista) según el modo
+                        resolve({
+                            status: 'completed',
+                            url: currentMode === 'video' 
+                                ? 'https://www.w3schools.com/html/mov_bbb.mp4' // Video placeholder
+                                : 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=1000&auto=format&fit=crop' // Imagen futurista
+                        });
+                    }
+                }, 2000); // Polling cada 2 segundos reenviando la API key
+            });
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            const key = sessionStorage.getItem('ws_session_key');
+            const prompt = promptInput.value.trim();
+
+            if (!prompt) return alert('Por favor, escribe un prompt mágico.');
+
+            // Estado de Carga
+            generateBtn.disabled = true;
+            generateBtnText.textContent = "Procesando...";
+            generateLoader.classList.remove('hidden');
+            resultArea.classList.add('hidden');
+            
+            try {
+                // PASO 1: Iniciar Trabajo (Task) en WaveSpeed
+                // Real: fetch('https://api.wavespeed.ai/v1/generate/...', { method: 'POST', body: ..., headers: { Authorization: key }})
+                console.log(`[API Bridge] Enviando petición a modelo de bajo coste Seedream. Key usada: ${key.substring(0,6)}...`);
+                
+                // Simulamos que la API nos regresa un Task ID
+                const dummyTaskId = "ws_task_987654321";
+
+                // PASO 2: Polling asíncrono
+                const result = await checkJobStatus(dummyTaskId, key);
+
+                if (result.status === 'completed') {
+                    generatedUrl = result.url;
+                    
+                    // Renderizar
+                    resultContainer.innerHTML = '';
+                    if (currentMode === 'video') {
+                        resultContainer.innerHTML = `<video src="${generatedUrl}" autoplay loop controls class="w-full h-full object-cover rounded-xl"></video>`;
+                    } else {
+                        resultContainer.innerHTML = `<img src="${generatedUrl}" class="w-full h-full object-contain rounded-xl" alt="Generado">`;
+                    }
+                    
+                    resultArea.classList.remove('hidden');
+                    // Scroll suave hacia el resultado
+                    resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+
+            } catch (error) {
+                alert("Error en la generación: " + error.message);
+            } finally {
+                // Restaurar Botón
+                generateBtnText.textContent = "Generar Magia";
+                generateLoader.classList.add('hidden');
+                validateApiKey(); // Reactiva el botón si la key sigue existiendo
+            }
+        });
+
+        // Botón Descargar
+        downloadBtn.addEventListener('click', () => {
+            if (!generatedUrl) return;
+            const a = document.createElement('a');
+            a.href = generatedUrl;
+            a.download = `GisseleGeo_Magic_${Date.now()}.${currentMode === 'video' ? 'mp4' : 'jpg'}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        // ==============================================
+        // 6. ANIMACIÓN DE FONDO (CANVAS)
+        // ==============================================
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2.5;
+                this.speedX = Math.random() * 0.3 - 0.15;
+                this.speedY = Math.random() * 0.3 - 0.15;
+                
+                // Colores más vibrantes para estrellas (Cyan, Magenta y Púrpura brillante)
+                const colors = ['rgba(0, 217, 255, 0.8)', 'rgba(255, 45, 149, 0.8)', 'rgba(168, 85, 247, 0.8)', '#ffffff'];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x > canvas.width) this.x = 0;
+                if (this.x < 0) this.x = canvas.width;
+                if (this.y > canvas.height) this.y = 0;
+                if (this.y < 0) this.y = canvas.height;
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            let num = Math.min(window.innerWidth / 10, 150);
+            for (let i = 0; i < num; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        // Nebulosa de fondo con gradientes radiales
+        let time = 0;
+        function drawNebula() {
+            // Fondo oscuro base
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cx1 = canvas.width / 2 + Math.sin(time * 0.5) * 200;
+            const cy1 = canvas.height / 2 + Math.cos(time * 0.3) * 200;
+            
+            // Gradiente 1 (Azul Neón Intenso)
+            const g1 = ctx.createRadialGradient(cx1, cy1, 0, cx1, cy1, canvas.width * 0.8);
+            g1.addColorStop(0, 'rgba(0, 217, 255, 0.15)');
+            g1.addColorStop(0.5, 'rgba(0, 217, 255, 0.02)');
+            g1.addColorStop(1, 'transparent');
+            ctx.fillStyle = g1;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gradiente 2 (Rosa Neón)
+            const cx2 = canvas.width / 2 + Math.cos(time * 0.4) * 250;
+            const cy2 = canvas.height / 2 + Math.sin(time * 0.6) * 250;
+            const g2 = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, canvas.width * 0.8);
+            g2.addColorStop(0, 'rgba(255, 45, 149, 0.12)');
+            g2.addColorStop(0.5, 'rgba(255, 45, 149, 0.02)');
+            g2.addColorStop(1, 'transparent');
+            ctx.fillStyle = g2;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gradiente 3 (Púrpura Profundo para dar dimensión)
+            const cx3 = canvas.width / 2 + Math.sin(time * 0.7) * 150;
+            const cy3 = canvas.height / 2 + Math.cos(time * 0.8) * 150;
+            const g3 = ctx.createRadialGradient(cx3, cy3, 0, cx3, cy3, canvas.width * 0.6);
+            g3.addColorStop(0, 'rgba(126, 34, 206, 0.15)');
+            g3.addColorStop(1, 'transparent');
+            ctx.fillStyle = g3;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawNebula();
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            time += 0.005;
+            requestAnimationFrame(animate);
+        }
+
+        initParticles();
+        animate();
+
+    </script>
+</body>
+</html>
