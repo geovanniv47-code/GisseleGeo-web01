@@ -810,5 +810,31 @@
         animate();
 
     </script>
-</body>
+<!-- Cargar Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Lógica del Login con Google -->
+<script>
+  // Inicializar Supabase (¡Pega tus llaves aquí, wey!)
+  const supabaseUrl = 'https://pveqsczkhcfxetqdcajo.supabase.co';
+  const supabaseKey = 'sb_publishable_3HJ28HMEckkdW3U7o9ruoQ_KNGA3wIX';
+  const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+  // Conectar el botón de Google
+  const btnGoogle = document.getElementById('btnGoogle'); 
+  
+  if (btnGoogle) {
+      btnGoogle.addEventListener('click', async () => {
+          const { data, error } = await supabase.auth.signInWithOAuth({
+              provider: 'google',
+          });
+          if (error) {
+              console.error("Error al iniciar sesión: ", error);
+              alert("Hubo un error al conectar con Google. Checa la consola.");
+          }
+      });
+  } else {
+      console.log("No se encontró el botón de Google en el HTML. Verifica que tenga id='btnGoogle'.");
+  }
+</script>  </body>
 </html>
