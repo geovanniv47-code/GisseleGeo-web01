@@ -836,5 +836,14 @@
   } else {
       console.log("No se encontró el botón de Google en el HTML. Verifica que tenga id='btnGoogle'.");
   }
+  // Escuchar si hay una sesión activa
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            // Si el wey ya entró, ocultamos el botón
+            btnGoogle.style.display = 'none';
+            // Le damos la bienvenida chida
+            alert("¡Bienvenido, " + session.user.email + "! Sesión iniciada con éxito.");
+        }
+    });
 </script>  </body>
 </html>
