@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-< lang="es">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,45 +42,6 @@
         
         .text-glow-blue { text-shadow: 0 0 10px var(--neon-blue); }
         .text-glow-pink { text-shadow: 0 0 10px var(--neon-pink); }
-
-        /* Animación del borde que recorre el botón (Border Light Trace) */
-        .btn-animated-border {
-            position: relative;
-            overflow: hidden;
-            border-radius: 0.75rem; /* xl */
-            padding: 2px; /* Grosor del borde */
-            transition: transform 0.2s ease;
-        }
-        
-        .btn-animated-border:active {
-            transform: scale(0.97);
-        }
-
-        .btn-animated-border::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 200%;
-            height: 200%;
-            background: conic-gradient(transparent 70%, var(--border-light-color, #fff) 100%);
-            animation: rotate 2s linear infinite;
-            transform-origin: 0 0;
-            transform: translate(-50%, -50%);
-        }
-
-        .btn-animated-border-content {
-            position: relative;
-            background: rgba(15, 15, 30, 0.95);
-            backdrop-filter: blur(4px);
-            border-radius: calc(0.75rem - 2px);
-            height: 100%;
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-        }
 
         @keyframes rotate {
             100% { transform: translate(-50%, -50%) rotate(360deg); }
@@ -146,6 +107,41 @@
             align-items: center;
             justify-content: center;
             z-index: 10;
+        }
+
+        /* Inputs con estilo neón (faltaba definirla) */
+        .neon-input {
+            background: rgba(10, 10, 25, 0.6);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            color: #ffffff;
+            outline: none;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        .neon-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .neon-input:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 217, 255, 0.4);
+        }
+
+        /* Máscara de degradado para la imagen decorativa del login (faltaba definirla) */
+        .mask-image-gradient {
+            -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 75%);
+            mask-image: radial-gradient(circle at center, black 30%, transparent 75%);
+        }
+
+        /* Loader / spinner del botón Generar (faltaba definirla) */
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -217,7 +213,7 @@
 
             <!-- Modo prueba para desarrollo (Se borrará luego) -->
             <button id="devBypassBtn" class="mt-4 w-full text-xs text-gray-500 hover:text-white underline">
-                (Dev) Entrar como Admin de prueba (Sin Firebase)
+                (Dev) Entrar como Admin de prueba
             </button>
         </div>
     </main>
@@ -333,30 +329,18 @@
         </div>
     </main>
 
+    <!-- Librería de Supabase (se carga aquí, antes del script principal, para que ya exista cuando se use) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <script type="module">
         // ==============================================
-        // 1. CONFIGURACIÓN FIREBASE Y AUTH
+        // 1. CONFIGURACIÓN SUPABASE Y AUTH
         // ==============================================
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // NOTA PARA GISSELEGEO: Aquí reemplazaremos las llaves cuando creemos el proyecto en Google Cloud / Firebase.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "dummy",
-                authDomain: "dummy",
-                projectId: "dummy"
-              };
-
-        let app, auth, provider;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            provider = new GoogleAuthProvider();
-        } catch (e) {
-            console.warn("Firebase no está configurado aún. Usaremos el modo bypass.");
-        }
+        // NOTA: la variable se llama "supabaseClient" (no "supabase") para no chocar
+        // con el objeto global "supabase" que ya viene del script de la librería.
+        const supabaseUrl = 'https://pveqsczkhcfxetqdcajo.supabase.co';
+        const supabaseKey = 'sb_publishable_3HJ28HMEckkdW3U7o9ruoQ_KNGA3wIX';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         // ==============================================
         // 2. REFERENCIAS DEL DOM
@@ -401,18 +385,30 @@
         // ==============================================
         // 3. LÓGICA DE NAVEGACIÓN Y AUTH
         // ==============================================
-        function showApp(userEmail) {
+        async function showApp(userEmail, isDevBypass = false) {
             loginView.classList.add('hidden');
             watermarks.forEach(w => w.classList.add('hidden'));
             appView.classList.remove('hidden');
             appView.classList.add('flex');
             userEmailDisplay.textContent = userEmail;
 
-            // Mostrar menú admin si es GisseleGeo
-            if (userEmail.toLowerCase() === 'geovanniv47@gmail.com') {
+            // Mostrar menú admin: se pregunta a la tabla "admins" protegida con RLS en Supabase,
+            // ya no se decide con un correo quemado aquí en el navegador.
+            if (isDevBypass) {
+                // Modo prueba local: no hay sesión real de Supabase, así que no podemos
+                // consultar la tabla protegida. Mostramos el panel solo para probar el diseño.
                 adminPanel.classList.remove('hidden');
             } else {
-                adminPanel.classList.add('hidden');
+                const { data: adminRow } = await supabaseClient
+                    .from('admins')
+                    .select('email')
+                    .eq('email', userEmail.toLowerCase())
+                    .maybeSingle();
+                if (adminRow) {
+                    adminPanel.classList.remove('hidden');
+                } else {
+                    adminPanel.classList.add('hidden');
+                }
             }
 
             // Restaurar API Key si existe en la sesión
@@ -432,39 +428,42 @@
             apiKeyInput.value = '';
         }
 
-        // Si Firebase está configurado, escuchar cambios.
-        if (auth) {
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    showApp(user.email);
-                } else {
-                    showLogin();
-                }
-            });
-        }
+        // Escuchar cambios de sesión de Supabase (login, logout, sesión ya iniciada al cargar)
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (session && session.user) {
+                showApp(session.user.email);
+            } else if (event !== 'INITIAL_SESSION') {
+                // Evita "parpadear" a la pantalla de login si el bypass de dev ya mostró la app
+                showLogin();
+            }
+        });
 
-        // Logins
-        loginForm.addEventListener('submit', (e) => {
+        // Logins (correo y contraseña)
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if(!auth) return alert("Firebase no configurado.");
             const email = document.getElementById('emailInput').value;
             const pass = document.getElementById('passInput').value;
-            signInWithEmailAndPassword(auth, email, pass).catch(err => alert("Error: " + err.message));
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+            if (error) alert("Error: " + error.message);
         });
 
-        googleLoginBtn.addEventListener('click', () => {
-            if(!auth) return alert("Firebase no configurado.");
-            signInWithPopup(auth, provider).catch(err => alert("Error Google Login: " + err.message));
+        // Login con Google (mismo id que el botón real: googleLoginBtn)
+        googleLoginBtn.addEventListener('click', async () => {
+            const { error } = await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
+            if (error) alert("Error Google Login: " + error.message);
         });
 
-        logoutBtn.addEventListener('click', () => {
-            if(auth) signOut(auth);
+        logoutBtn.addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
             showLogin();
         });
 
         // MODO BYPASS DE PRUEBA (Para que puedas probar el diseño AHORA MISMO)
         devBypassBtn.addEventListener('click', () => {
-            showApp('geovanniv47@gmail.com');
+            showApp('geovanniv47@gmail.com', true);
         });
 
         // ==============================================
@@ -519,7 +518,7 @@
             enhancePromptBtn.disabled = true;
 
             try {
-                const apiKey = ""; // Canvas inyectará la clave aquí
+                const apiKey = ""; // TODO: pendiente — no la escribas aquí, se debe cargar desde una variable de entorno (Netlify) o un endpoint propio
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
                 
                 const payload = {
@@ -565,7 +564,7 @@
             analyzeImageBtn.disabled = true;
 
             try {
-                const apiKey = "";
+                const apiKey = ""; // TODO: pendiente — mismo caso, cargar desde variable de entorno
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
                 
                 const payload = {
@@ -809,47 +808,6 @@
         initParticles();
         animate();
 
-    </script>
-<!-- Cargar Supabase -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <!-- Lógica Definitiva del Login -->
-    <script>
-      // 1. Inicializar Supabase
-      const supabaseUrl = 'https://pveqsczkhcfxetqdcajo.supabase.co';
-      const supabaseKey = 'sb_publishable_3HJ28HMEckkdW3U7o9ruoQ_KNGA3wIX';
-      const supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
-      // 2. Conectar el botón de Google y forzar la redirección
-      const btnGoogle = document.getElementById('btnGoogle'); 
-      if (btnGoogle) {
-          btnGoogle.addEventListener('click', async () => {
-              const { error } = await supabase.auth.signInWithOAuth({
-                  provider: 'google',
-                  options: {
-                      // Este truco obliga a Supabase a regresar exactamente a tu link de Netlify
-                      redirectTo: window.location.origin 
-                  }
-              });
-              if (error) {
-                  console.error("Error de login:", error);
-                  alert("Hubo un error al conectar con Google.");
-              }
-          });
-      }
-
-      // 3. Detector de Sesión Blindado
-      supabase.auth.onAuthStateChange((event, session) => {
-          if (session) {
-              // Ocultar el botón si ya hay sesión
-              if (btnGoogle) btnGoogle.style.display = 'none';
-              
-              // Solo lanzamos la alerta si acaba de entrar o si cargó la página ya logueado
-              if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-                  alert("¡Bienvenido, " + session.user.email + "! Has entrado con éxito a GisseleGeo.");
-              }
-          }
-      });
     </script>
 </body>
 </html>
