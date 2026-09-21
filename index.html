@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+< lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -811,39 +811,45 @@
 
     </script>
 <!-- Cargar Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Lógica del Login con Google -->
-<script>
-  // Inicializar Supabase (¡Pega tus llaves aquí, wey!)
-  const supabaseUrl = 'https://pveqsczkhcfxetqdcajo.supabase.co';
-  const supabaseKey = 'sb_publishable_3HJ28HMEckkdW3U7o9ruoQ_KNGA3wIX';
-  const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    <!-- Lógica Definitiva del Login -->
+    <script>
+      // 1. Inicializar Supabase
+      const supabaseUrl = 'https://pveqsczkhcfxetqdcajo.supabase.co';
+      const supabaseKey = 'sb_publishable_3HJ28HMEckkdW3U7o9ruoQ_KNGA3wIX';
+      const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-  // Conectar el botón de Google
-  const btnGoogle = document.getElementById('btnGoogle'); 
-  
-  if (btnGoogle) {
-      btnGoogle.addEventListener('click', async () => {
-          const { data, error } = await supabase.auth.signInWithOAuth({
-              provider: 'google',
+      // 2. Conectar el botón de Google y forzar la redirección
+      const btnGoogle = document.getElementById('btnGoogle'); 
+      if (btnGoogle) {
+          btnGoogle.addEventListener('click', async () => {
+              const { error } = await supabase.auth.signInWithOAuth({
+                  provider: 'google',
+                  options: {
+                      // Este truco obliga a Supabase a regresar exactamente a tu link de Netlify
+                      redirectTo: window.location.origin 
+                  }
+              });
+              if (error) {
+                  console.error("Error de login:", error);
+                  alert("Hubo un error al conectar con Google.");
+              }
           });
-          if (error) {
-              console.error("Error al iniciar sesión: ", error);
-              alert("Hubo un error al conectar con Google. Checa la consola.");
+      }
+
+      // 3. Detector de Sesión Blindado
+      supabase.auth.onAuthStateChange((event, session) => {
+          if (session) {
+              // Ocultar el botón si ya hay sesión
+              if (btnGoogle) btnGoogle.style.display = 'none';
+              
+              // Solo lanzamos la alerta si acaba de entrar o si cargó la página ya logueado
+              if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                  alert("¡Bienvenido, " + session.user.email + "! Has entrado con éxito a GisseleGeo.");
+              }
           }
       });
-  } else {
-      console.log("No se encontró el botón de Google en el HTML. Verifica que tenga id='btnGoogle'.");
-  }
-  // Escuchar si hay una sesión activa
-    supabase.auth.onAuthStateChange((event, session) => {
-        if (session) {
-            // Si el wey ya entró, ocultamos el botón
-            btnGoogle.style.display = 'none';
-            // Le damos la bienvenida chida
-            alert("¡Bienvenido, " + session.user.email + "! Sesión iniciada con éxito.");
-        }
-    });
-</script>  </body>
+    </script>
+</body>
 </html>
