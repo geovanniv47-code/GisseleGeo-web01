@@ -617,73 +617,97 @@
         });
 
         // ==============================================
-        // 5. LLAMADA A LA API DE WAVESPEED (SIMULACIÓN ASÍNCRONA)
+        // 5. LLAMADA REAL A LA API DE WAVESPEED
         // ==============================================
-        
-        async function checkJobStatus(taskId, apiKey) {
-            // Nota Técnica: Esta función simula un polling real.
-            // Cuando configures WaveSpeed en código de producción, reemplazarás la URL.
-            // Para ahorrar créditos como pediste, usarías modelos como "seedream-lite" o "image-edit-fast".
-            
-            return new Promise((resolve) => {
-                let attempts = 0;
-                const interval = setInterval(() => {
-                    attempts++;
-                    // En el mundo real, harías: fetch(`https://api.wavespeed.ai/v1/tasks/${taskId}`, { headers: { 'Authorization': `Bearer ${apiKey}` }})
-                    
-                    // Simulación: Esperamos 3 "intentos" (~6 segundos) para dar éxito.
-                    if (attempts > 3) {
-                        clearInterval(interval);
-                        // Devolver una imagen o video dummy (futurista) según el modo
-                        resolve({
-                            status: 'completed',
-                            url: currentMode === 'video' 
-                                ? 'https://www.w3schools.com/html/mov_bbb.mp4' // Video placeholder
-                                : 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=1000&auto=format&fit=crop' // Imagen futurista
-                        });
-                    }
-                }, 2000); // Polling cada 2 segundos reenviando la API key
+        const WAVESPEED_API_BASE = 'https://api.wavespeed.ai/api/v3';
+
+        // Modelos elegidos por relación costo/calidad. Si WaveSpeed cambia nombres
+        // o precios, este es el único lugar que hay que tocar.
+        const MODEL_IMAGE_EDIT = 'bytedance/seedream-v4/edit';               // ~$0.03-0.04 por imagen
+        const MODEL_IMAGE_TO_VIDEO = 'wavespeed-ai/wan-2.1/i2v-480p-ultra-fast'; // variante económica de Wan 2.1
+
+        // Manda el trabajo a WaveSpeed y regresa el ID para hacerle seguimiento (polling)
+        async function submitWaveSpeedTask(model, payload, apiKey) {
+            const response = await fetch(`${WAVESPEED_API_BASE}/${model}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok || !json.data || !json.data.id) {
+                throw new Error(json.message || json.error || `WaveSpeed respondió con error (HTTP ${response.status})`);
+            }
+            return json.data.id;
+        }
+
+        // Pregunta cada 2 segundos si el trabajo ya terminó
+        async function pollWaveSpeedResult(requestId, apiKey, maxAttempts = 90) {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                await new Promise(r => setTimeout(r, 2000));
+                const response = await fetch(`${WAVESPEED_API_BASE}/predictions/${requestId}/result`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                const json = await response.json().catch(() => ({}));
+                const data = json.data || {};
+
+                if (data.status === 'completed') {
+                    if (data.outputs && data.outputs.length > 0) return data.outputs[0];
+                    throw new Error('WaveSpeed terminó el trabajo pero no regresó ningún resultado.');
+                }
+                if (data.status === 'failed' || data.status === 'error') {
+                    throw new Error(data.error || 'WaveSpeed reportó un error al generar.');
+                }
+                // Si sigue "created" o "processing", seguimos esperando
+            }
+            throw new Error('Se agotó el tiempo de espera (~3 min). Intenta de nuevo.');
         }
 
         generateBtn.addEventListener('click', async () => {
             const key = sessionStorage.getItem('ws_session_key');
             const prompt = promptInput.value.trim();
 
+            if (!key) return alert('Pega tu WaveSpeed API Key arriba primero.');
             if (!prompt) return alert('Por favor, escribe un prompt mágico.');
+            if (!currentFileBase64) return alert('Sube una imagen de referencia primero.');
 
             // Estado de Carga
             generateBtn.disabled = true;
             generateBtnText.textContent = "Procesando...";
             generateLoader.classList.remove('hidden');
             resultArea.classList.add('hidden');
-            
+
             try {
-                // PASO 1: Iniciar Trabajo (Task) en WaveSpeed
-                // Real: fetch('https://api.wavespeed.ai/v1/generate/...', { method: 'POST', body: ..., headers: { Authorization: key }})
-                console.log(`[API Bridge] Enviando petición a modelo de bajo coste Seedream. Key usada: ${key.substring(0,6)}...`);
-                
-                // Simulamos que la API nos regresa un Task ID
-                const dummyTaskId = "ws_task_987654321";
-
-                // PASO 2: Polling asíncrono
-                const result = await checkJobStatus(dummyTaskId, key);
-
-                if (result.status === 'completed') {
-                    generatedUrl = result.url;
-                    
-                    // Renderizar
-                    resultContainer.innerHTML = '';
-                    if (currentMode === 'video') {
-                        resultContainer.innerHTML = `<video src="${generatedUrl}" autoplay loop controls class="w-full h-full object-cover rounded-xl"></video>`;
-                    } else {
-                        resultContainer.innerHTML = `<img src="${generatedUrl}" class="w-full h-full object-contain rounded-xl" alt="Generado">`;
-                    }
-                    
-                    resultArea.classList.remove('hidden');
-                    // Scroll suave hacia el resultado
-                    resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                let requestId;
+                if (currentMode === 'video') {
+                    // Ojo: cada segundo de video tiene costo, por eso duration=5 (el mínimo típico)
+                    requestId = await submitWaveSpeedTask(MODEL_IMAGE_TO_VIDEO, {
+                        image: currentFileBase64,
+                        prompt: prompt,
+                        duration: 5
+                    }, key);
+                } else {
+                    requestId = await submitWaveSpeedTask(MODEL_IMAGE_EDIT, {
+                        prompt: prompt,
+                        images: [currentFileBase64]
+                    }, key);
                 }
+
+                generatedUrl = await pollWaveSpeedResult(requestId, key);
+
+                // Renderizar
+                resultContainer.innerHTML = '';
+                if (currentMode === 'video') {
+                    resultContainer.innerHTML = `<video src="${generatedUrl}" autoplay loop controls class="w-full h-full object-cover rounded-xl"></video>`;
+                } else {
+                    resultContainer.innerHTML = `<img src="${generatedUrl}" class="w-full h-full object-contain rounded-xl" alt="Generado">`;
+                }
+
+                resultArea.classList.remove('hidden');
+                // Scroll suave hacia el resultado
+                resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
             } catch (error) {
                 alert("Error en la generación: " + error.message);
