@@ -210,11 +210,6 @@
                     Entrar con Google
                 </div>
             </button>
-
-            <!-- Modo prueba para desarrollo (Se borrará luego) -->
-            <button id="devBypassBtn" class="mt-4 w-full text-xs text-gray-500 hover:text-white underline">
-                (Dev) Entrar como Admin de prueba
-            </button>
         </div>
     </main>
 
@@ -263,6 +258,16 @@
                     <p class="text-xs text-gray-400 mt-2">
                         Tu key se usa solo para esta sesión, no se guarda en ningún servidor. 
                         <a href="https://wavespeed.ai" target="_blank" class="text-cyan-400 hover:underline">Get a key</a>
+                    </p>
+                </div>
+
+                <!-- Gemini API Key (para Mejorar Prompt / Analizar Imagen) -->
+                <div class="bg-black/30 p-4 rounded-xl border border-purple-500/30">
+                    <label class="block text-sm font-semibold text-purple-300 mb-2">Gemini API Key (opcional, para ✨ Mejorar / Analizar)</label>
+                    <input type="password" id="geminiKeyInput" placeholder="Pega tu clave (ej: AIza...)" class="w-full px-4 py-3 rounded-xl neon-input text-sm font-mono tracking-widest">
+                    <p class="text-xs text-gray-400 mt-2">
+                        Solo se usa en tu sesión, no se guarda en ningún servidor.
+                        <a href="https://aistudio.google.com/apikey" target="_blank" class="text-purple-400 hover:underline">Get a key</a>
                     </p>
                 </div>
 
@@ -353,7 +358,6 @@
         // Login
         const loginForm = document.getElementById('loginForm');
         const googleLoginBtn = document.getElementById('googleLoginBtn');
-        const devBypassBtn = document.getElementById('devBypassBtn');
         
         // App Main
         const userEmailDisplay = document.getElementById('userEmailDisplay');
@@ -362,6 +366,7 @@
         
         // Generador
         const apiKeyInput = document.getElementById('apiKeyInput');
+        const geminiKeyInput = document.getElementById('geminiKeyInput');
         const modeImageBtn = document.getElementById('modeImageBtn');
         const modeVideoBtn = document.getElementById('modeVideoBtn');
         const fileInput = document.getElementById('fileInput');
@@ -386,30 +391,23 @@
         // ==============================================
         // 3. LÓGICA DE NAVEGACIÓN Y AUTH
         // ==============================================
-        async function showApp(userEmail, isDevBypass = false) {
+        async function showApp(userEmail) {
             loginView.classList.add('hidden');
             watermarks.forEach(w => w.classList.add('hidden'));
             appView.classList.remove('hidden');
             appView.classList.add('flex');
             userEmailDisplay.textContent = userEmail;
 
-            // Mostrar menú admin: se pregunta a la tabla "admins" protegida con RLS en Supabase,
-            // ya no se decide con un correo quemado aquí en el navegador.
-            if (isDevBypass) {
-                // Modo prueba local: no hay sesión real de Supabase, así que no podemos
-                // consultar la tabla protegida. Mostramos el panel solo para probar el diseño.
+            // Mostrar menú admin: se pregunta a la tabla "admins" protegida con RLS en Supabase.
+            const { data: adminRow } = await supabaseClient
+                .from('admins')
+                .select('email')
+                .eq('email', userEmail.toLowerCase())
+                .maybeSingle();
+            if (adminRow) {
                 adminPanel.classList.remove('hidden');
             } else {
-                const { data: adminRow } = await supabaseClient
-                    .from('admins')
-                    .select('email')
-                    .eq('email', userEmail.toLowerCase())
-                    .maybeSingle();
-                if (adminRow) {
-                    adminPanel.classList.remove('hidden');
-                } else {
-                    adminPanel.classList.add('hidden');
-                }
+                adminPanel.classList.add('hidden');
             }
 
             // Restaurar API Key si existe en la sesión
@@ -417,6 +415,10 @@
             if (savedKey) {
                 apiKeyInput.value = savedKey;
                 validateApiKey();
+            }
+            const savedGeminiKey = sessionStorage.getItem('gemini_session_key');
+            if (savedGeminiKey) {
+                geminiKeyInput.value = savedGeminiKey;
             }
         }
 
@@ -426,7 +428,9 @@
             appView.classList.add('hidden');
             appView.classList.remove('flex');
             sessionStorage.removeItem('ws_session_key');
+            sessionStorage.removeItem('gemini_session_key');
             apiKeyInput.value = '';
+            geminiKeyInput.value = '';
         }
 
         // Escuchar cambios de sesión de Supabase (login, logout, sesión ya iniciada al cargar)
@@ -460,11 +464,6 @@
         logoutBtn.addEventListener('click', async () => {
             await supabaseClient.auth.signOut();
             showLogin();
-        });
-
-        // MODO BYPASS DE PRUEBA (Para que puedas probar el diseño AHORA MISMO)
-        devBypassBtn.addEventListener('click', () => {
-            showApp('geovanniv47@gmail.com', true);
         });
 
         // ==============================================
@@ -634,6 +633,11 @@
             }
         }
         apiKeyInput.addEventListener('input', validateApiKey);
+        geminiKeyInput.addEventListener('input', () => {
+            const val = geminiKeyInput.value.trim();
+            if (val) sessionStorage.setItem('gemini_session_key', val);
+            else sessionStorage.removeItem('gemini_session_key');
+        });
 
         // Cambiar Modos
         function switchMode(mode) {
@@ -662,13 +666,14 @@
                 promptInput.placeholder = "¡Escribe una idea aquí primero para que Gemini la mejore!";
                 return;
             }
-            
+            const apiKey = sessionStorage.getItem('gemini_session_key');
+            if (!apiKey) return alert('Pega tu Gemini API Key arriba primero (sección morada).');
+
             const originalContent = enhancePromptBtn.innerHTML;
             enhancePromptBtn.innerHTML = "✨ Pensando...";
             enhancePromptBtn.disabled = true;
 
             try {
-                const apiKey = ""; // TODO: pendiente — no la escribas aquí, se debe cargar desde una variable de entorno (Netlify) o un endpoint propio
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
                 
                 const payload = {
@@ -705,7 +710,9 @@
         analyzeImageBtn.addEventListener('click', async (e) => {
             e.stopPropagation(); // Evita que se abra el explorador de archivos al clickear el botón
             if (!currentFileBase64) return;
-            
+            const apiKey = sessionStorage.getItem('gemini_session_key');
+            if (!apiKey) return alert('Pega tu Gemini API Key arriba primero (sección morada).');
+
             const base64Data = currentFileBase64.split(',')[1];
             const mimeType = currentFileBase64.split(';')[0].split(':')[1];
 
@@ -714,14 +721,13 @@
             analyzeImageBtn.disabled = true;
 
             try {
-                const apiKey = ""; // TODO: pendiente — mismo caso, cargar desde variable de entorno
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
                 
                 const payload = {
                     contents: [{
                         role: "user",
                         parts: [
-                            { text: "Describe esta imagen detalladamente en un párrafo corto en inglés, como si fuera un prompt de alta calidad para generar variaciones de la misma. Enfócate en estilo visual, iluminación, colores y sujetos principales." },
+                            { text: "Write a short English editing instruction for an AI image-editing model (not a text-to-image generator). This is for EDITING the exact same photo, not for creating a new similar image. Do NOT describe the person's face, age, ethnicity or body — the source photo already provides that and must be preserved exactly. Only describe: (1) what should change (clothing, background, pose if relevant), and (2) end the instruction with 'keep the same person, same face, same identity, same pose unless stated otherwise'." },
                             { inlineData: { mimeType: mimeType, data: base64Data } }
                         ]
                     }]
@@ -839,8 +845,12 @@
                         duration: 5
                     }, key);
                 } else {
+                    // Seedream tiende a "regenerar" la cara si el prompt no aclara que debe
+                    // conservar la identidad exacta de la persona de la foto de referencia.
+                    const identitySuffix = "Keep the exact same person, same face, same facial features and same identity as in the reference photo — do not change or regenerate the face.";
+                    const safePrompt = /same (person|face|identity)/i.test(prompt) ? prompt : `${prompt}. ${identitySuffix}`;
                     requestId = await submitWaveSpeedTask(MODEL_IMAGE_EDIT, {
-                        prompt: prompt,
+                        prompt: safePrompt,
                         images: [currentFileBase64]
                     }, key);
                 }
