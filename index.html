@@ -245,11 +245,12 @@
                     <span class="text-xs bg-pink-500/20 text-pink-300 px-2 py-1 rounded-full">Admin Activo</span>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Gestionar Usuarios</button>
-                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Ver Logs Generales</button>
-                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Configurar Endpoints</button>
-                    <button class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Estadísticas</button>
+                    <button id="btnManageUsers" class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Gestionar Usuarios</button>
+                    <button id="btnViewLogs" class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Ver Logs Generales</button>
+                    <button id="btnManageAdmins" class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Gestionar Administradores</button>
+                    <button id="btnStats" class="bg-gray-800/50 hover:bg-gray-700/50 p-3 rounded-lg text-sm transition-colors text-left border border-gray-700">Estadísticas</button>
                 </div>
+                <div id="adminOutput" class="mt-4 text-sm text-gray-200"></div>
             </section>
 
             <!-- Card Principal de Generación -->
@@ -464,6 +465,155 @@
         // MODO BYPASS DE PRUEBA (Para que puedas probar el diseño AHORA MISMO)
         devBypassBtn.addEventListener('click', () => {
             showApp('geovanniv47@gmail.com', true);
+        });
+
+        // ==============================================
+        // 3.5. PANEL DE ADMINISTRACIÓN (usuarios, logs, admins, stats)
+        // ==============================================
+        const adminOutput = document.getElementById('adminOutput');
+        const btnManageUsers = document.getElementById('btnManageUsers');
+        const btnViewLogs = document.getElementById('btnViewLogs');
+        const btnManageAdmins = document.getElementById('btnManageAdmins');
+        const btnStats = document.getElementById('btnStats');
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str ?? '';
+            return div.innerHTML;
+        }
+
+        // --- Gestionar Usuarios ---
+        btnManageUsers.addEventListener('click', async () => {
+            adminOutput.innerHTML = '<p class="text-gray-400">Cargando usuarios...</p>';
+            const { data, error } = await supabaseClient.rpc('admin_list_users');
+            if (error) {
+                adminOutput.innerHTML = `<p class="text-red-400">Error: ${escapeHtml(error.message)}</p>`;
+                return;
+            }
+            if (!data || data.length === 0) {
+                adminOutput.innerHTML = '<p class="text-gray-400">Todavía no hay usuarios registrados.</p>';
+                return;
+            }
+            let rows = data.map(u => `
+                <tr class="border-b border-gray-700/50">
+                    <td class="py-2 pr-3">${escapeHtml(u.email)}</td>
+                    <td class="py-2 pr-3 text-gray-400">${new Date(u.created_at).toLocaleString('es-MX')}</td>
+                    <td class="py-2 text-gray-400">${u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('es-MX') : '—'}</td>
+                </tr>`).join('');
+            adminOutput.innerHTML = `
+                <h3 class="text-pink-300 font-semibold mb-2">Usuarios registrados (${data.length})</h3>
+                <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead><tr class="text-gray-500 text-xs"><th class="pb-2">Correo</th><th class="pb-2">Registrado</th><th class="pb-2">Último acceso</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                </div>`;
+        });
+
+        // --- Ver Logs Generales ---
+        btnViewLogs.addEventListener('click', async () => {
+            adminOutput.innerHTML = '<p class="text-gray-400">Cargando logs...</p>';
+            const { data, error } = await supabaseClient
+                .from('generations')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            if (error) {
+                adminOutput.innerHTML = `<p class="text-red-400">Error: ${escapeHtml(error.message)}</p>`;
+                return;
+            }
+            if (!data || data.length === 0) {
+                adminOutput.innerHTML = '<p class="text-gray-400">Todavía no hay generaciones registradas.</p>';
+                return;
+            }
+            let rows = data.map(g => `
+                <tr class="border-b border-gray-700/50 align-top">
+                    <td class="py-2 pr-3">${escapeHtml(g.user_email)}</td>
+                    <td class="py-2 pr-3">${g.kind === 'video' ? '🎬 Video' : '🖼️ Imagen'}</td>
+                    <td class="py-2 pr-3 text-gray-400 max-w-[180px] truncate" title="${escapeHtml(g.prompt)}">${escapeHtml(g.prompt)}</td>
+                    <td class="py-2 pr-3 text-gray-400">${new Date(g.created_at).toLocaleString('es-MX')}</td>
+                    <td class="py-2">${g.result_url ? `<a href="${escapeHtml(g.result_url)}" target="_blank" class="text-cyan-400 underline">Ver</a>` : '—'}</td>
+                </tr>`).join('');
+            adminOutput.innerHTML = `
+                <h3 class="text-pink-300 font-semibold mb-2">Últimas generaciones (${data.length})</h3>
+                <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead><tr class="text-gray-500 text-xs"><th class="pb-2">Usuario</th><th class="pb-2">Tipo</th><th class="pb-2">Prompt</th><th class="pb-2">Fecha</th><th class="pb-2">Resultado</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                </div>`;
+        });
+
+        // --- Gestionar Administradores ---
+        async function renderAdminsList() {
+            adminOutput.innerHTML = '<p class="text-gray-400">Cargando administradores...</p>';
+            const { data, error } = await supabaseClient.from('admins').select('*').order('created_at');
+            if (error) {
+                adminOutput.innerHTML = `<p class="text-red-400">Error: ${escapeHtml(error.message)}</p>`;
+                return;
+            }
+            let rows = (data || []).map(a => `
+                <tr class="border-b border-gray-700/50">
+                    <td class="py-2 pr-3">${escapeHtml(a.email)}</td>
+                    <td class="py-2 pr-3 text-gray-400">${new Date(a.created_at).toLocaleString('es-MX')}</td>
+                    <td class="py-2"><button class="text-red-400 text-xs underline" data-remove-admin="${escapeHtml(a.email)}">Quitar</button></td>
+                </tr>`).join('');
+            adminOutput.innerHTML = `
+                <h3 class="text-pink-300 font-semibold mb-2">Administradores (${(data || []).length})</h3>
+                <table class="w-full text-left mb-3">
+                    <tbody>${rows}</tbody>
+                </table>
+                <div class="flex gap-2">
+                    <input id="newAdminEmail" type="email" placeholder="correo@ejemplo.com" class="flex-1 neon-input rounded-lg px-3 py-2 text-sm">
+                    <button id="addAdminBtn" class="bg-pink-500/80 hover:bg-pink-500 text-white text-sm px-4 rounded-lg">Agregar</button>
+                </div>`;
+
+            document.getElementById('addAdminBtn').addEventListener('click', async () => {
+                const email = document.getElementById('newAdminEmail').value.trim().toLowerCase();
+                if (!email) return;
+                const { error: insertError } = await supabaseClient.from('admins').insert({ email });
+                if (insertError) return alert('Error al agregar: ' + insertError.message);
+                renderAdminsList();
+            });
+
+            adminOutput.querySelectorAll('[data-remove-admin]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const email = btn.getAttribute('data-remove-admin');
+                    if (!confirm(`¿Quitar a ${email} como admin?`)) return;
+                    const { error: deleteError } = await supabaseClient.from('admins').delete().eq('email', email);
+                    if (deleteError) return alert('Error al quitar: ' + deleteError.message);
+                    renderAdminsList();
+                });
+            });
+        }
+        btnManageAdmins.addEventListener('click', renderAdminsList);
+
+        // --- Estadísticas ---
+        btnStats.addEventListener('click', async () => {
+            adminOutput.innerHTML = '<p class="text-gray-400">Calculando estadísticas...</p>';
+            const [{ data: gens, error: gensError }, { data: users, error: usersError }] = await Promise.all([
+                supabaseClient.from('generations').select('kind, estimated_cost_usd'),
+                supabaseClient.rpc('admin_list_users')
+            ]);
+            if (gensError) {
+                adminOutput.innerHTML = `<p class="text-red-400">Error: ${escapeHtml(gensError.message)}</p>`;
+                return;
+            }
+            const totalGens = gens ? gens.length : 0;
+            const totalImages = gens ? gens.filter(g => g.kind === 'image').length : 0;
+            const totalVideos = gens ? gens.filter(g => g.kind === 'video').length : 0;
+            const totalCost = gens ? gens.reduce((sum, g) => sum + (parseFloat(g.estimated_cost_usd) || 0), 0) : 0;
+            const totalUsers = (!usersError && users) ? users.length : '—';
+
+            adminOutput.innerHTML = `
+                <h3 class="text-pink-300 font-semibold mb-3">Estadísticas generales</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-black/30 rounded-lg p-3"><p class="text-2xl font-bold">${totalUsers}</p><p class="text-xs text-gray-400">Usuarios registrados</p></div>
+                    <div class="bg-black/30 rounded-lg p-3"><p class="text-2xl font-bold">${totalGens}</p><p class="text-xs text-gray-400">Generaciones totales</p></div>
+                    <div class="bg-black/30 rounded-lg p-3"><p class="text-2xl font-bold">${totalImages} 🖼️ / ${totalVideos} 🎬</p><p class="text-xs text-gray-400">Imágenes / Videos</p></div>
+                    <div class="bg-black/30 rounded-lg p-3"><p class="text-2xl font-bold">$${totalCost.toFixed(2)}</p><p class="text-xs text-gray-400">Costo estimado (USD)</p></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">* El costo es un estimado según el modelo usado, no es el gasto exacto de tu cuenta de WaveSpeed.</p>`;
         });
 
         // ==============================================
@@ -696,6 +846,22 @@
                 }
 
                 generatedUrl = await pollWaveSpeedResult(requestId, key);
+
+                // Guardar el registro para el panel de admin (Ver Logs / Estadísticas).
+                // Si esto falla, no debe tumbar la generación exitosa del usuario.
+                try {
+                    const estimatedCost = currentMode === 'video' ? 0.45 : 0.04; // aprox: video 5s a $0.09/s, imagen fija
+                    await supabaseClient.from('generations').insert({
+                        user_email: userEmailDisplay.textContent,
+                        kind: currentMode,
+                        prompt: prompt,
+                        result_url: generatedUrl,
+                        model: currentMode === 'video' ? MODEL_IMAGE_TO_VIDEO : MODEL_IMAGE_EDIT,
+                        estimated_cost_usd: estimatedCost
+                    });
+                } catch (logError) {
+                    console.warn('No se pudo guardar el log de esta generación:', logError);
+                }
 
                 // Renderizar
                 resultContainer.innerHTML = '';
